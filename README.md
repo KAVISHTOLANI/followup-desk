@@ -2,7 +2,7 @@
 
 A follow-up tracker for job searches, freelance leads and the people you don’t want to lose touch with. Log each conversation, set how often you mean to follow up, and work a daily queue of who’s overdue, due today or due this week.
 
-**Live demo:** [https://nudge-desk.vercel.app/](https://nudge-desk.vercel.app/) — runs entirely in your browser; demo data is fictional and labelled.
+**Live demo:** [https://nudge-desk-app.vercel.app/](https://nudge-desk-app.vercel.app/) — runs entirely in your browser; demo data is fictional and labelled.
 
 ![Landing with the follow-up queue](docs/landing.png)
 
