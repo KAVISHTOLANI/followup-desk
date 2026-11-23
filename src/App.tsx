@@ -1,12 +1,375 @@
-import {useEffect,useMemo,useState} from 'react';import {uid,toMarkdown,csv} from './logic';import './styles.css';
-const cfg={"slug":"followup-desk","name":"Nudge Desk","purpose":"Relationship follow-up tracking with interaction notes and next-contact dates.","kind":"followup","fields":["Person","last contact","next follow-up","channel","notes"],"accent":"rose"} as const;const pages=[['home','Home'],['workspace','Follow-ups'],['guide','Interaction history'],['examples','Next actions'],['reference','Cadence guide'],['help','Help']] as const;type Page=typeof pages[number][0];type Item={id:string;title:string;createdAt:string;[key:string]:string};const key='local-portfolio:'+cfg.slug;const makeDemo=():Item[]=>['Field note — Alder','Follow-up — Miro','Review — Sol','Plan — Juniper','Archive — Nia','Decision — Rowan','Reminder — Theo','Research — Imani','Checklist — Ellis','Exception — Saffron'].map((title,i)=>({id:'demo-'+i,title,createdAt:new Date(Date.now()-i*86400000).toISOString(),[cfg.fields[1]]:['In focus','Scheduled','Reviewed','Waiting','Reference'][i%5],[cfg.fields[2]]:['Ready','Needs review','Complete','Paused','Archived'][i%5],[cfg.fields[3]]:new Date(Date.now()+(i-3)*86400000).toISOString().slice(0,10),[cfg.fields[4]]:i===4?'A longer fictional note showing a realistic exception, the decision taken, and what should be checked before the record is used again.':'Fictional demo data for a populated local workspace.'}));function download(n:string,s:string,t='text/plain'){const x=document.createElement('a');x.href=URL.createObjectURL(new Blob([s],{type:t}));x.download=n;x.click();URL.revokeObjectURL(x.href)}
-export default function App(){const requested=location.hash.slice(1);const [page,setPage]=useState<Page|'notfound'>(()=>pages.some(([id])=>id===requested)?requested as Page:requested?'notfound':'home');const [records,setRecords]=useState<Item[]>(()=>{try{return JSON.parse(localStorage.getItem(key)||'null')||makeDemo()}catch{return makeDemo()}});const [form,setForm]=useState<Record<string,string>>({});const [query,setQuery]=useState('');const [notice,setNotice]=useState('');const [answer,setAnswer]=useState('');const [editing,setEditing]=useState<Item|null>(null);useEffect(()=>{document.title=(page==='home'?cfg.name:page==='notfound'?'Page not found':cfg.name+' — '+page);if(page!=='notfound')location.hash=page},[page]);const save=(x:Item[])=>{setRecords(x);localStorage.setItem(key,JSON.stringify(x))};const filtered=useMemo(()=>records.filter(r=>JSON.stringify(r).toLowerCase().includes(query.toLowerCase())),[records,query]);const add=(ev:React.FormEvent)=>{ev.preventDefault();const title=form[cfg.fields[0]]?.trim();if(!title){setNotice('Add a '+cfg.fields[0].toLowerCase()+' before saving.');return}const next={id:editing?.id||uid(),title,createdAt:editing?.createdAt||new Date().toISOString()} as Item;cfg.fields.forEach(f=>next[f]=form[f]||'');save(editing?records.map(r=>r.id===editing.id?next:r):[next,...records]);setForm({});setEditing(null);setNotice(editing?'Record updated locally.':'Saved locally. You can now find it in the archive or export it.')};const importJson=async(file?:File)=>{if(!file)return;try{const parsed=JSON.parse(await file.text());if(!Array.isArray(parsed)||!parsed.every(x=>x&&typeof x.title==='string'))throw new Error();save(parsed);setNotice('Imported '+parsed.length+' records into this browser.')}catch{setNotice('That file is not a valid export. Your existing records were left unchanged.')}};return <div className={'app '+cfg.accent}><div className="shell"><header><div className="brand"><small>LOCAL EDITION</small>{cfg.name}</div><nav aria-label="Primary">{pages.map(([id,label])=><button className={page===id?'active':''} key={id} onClick={()=>setPage(id)}>{label}</button>)}</nav></header>{page==='home'&&<Home records={records} open={()=>setPage('workspace')}/>} {page==='workspace'&&<Workspace/>}{page==='notfound'&&<NotFound/>}{page==='guide'&&<Guide title="Interaction history"/>}{page==='examples'&&<Examples/>}{page==='reference'&&<Reference/>}{page==='help'&&<Help/>}</div></div>;
-function Home({records,open}:{records:Item[];open:()=>void}){return <><section className="hero"><div><p className="eyebrow">A CLEARER WAY TO WORK LOCALLY</p><h1>Nudge Desk keeps the important details <i>findable.</i></h1><p>Keeping in touch is easier when the next thoughtful action is visible alongside the last conversation.</p><div className="actions"><button className="primary" onClick={open}>Open follow-ups</button><button onClick={()=>download(cfg.slug+'-demo.md',toMarkdown(cfg.name,records))}>Export demo</button></div></div><aside className="preview"><div className="preview-head">LIVE SAMPLE <span>● DEMO DATA</span></div><div className="preview-title">What is ready today</div>{records.slice(0,3).map((r,i)=><div className="peek" key={r.id}><div><b>{r.title}</b><br/><small>{r[cfg.fields[1]]}</small></div><span>{i===0?'NOW':'SAVED'}</span></div>)}<div className="preview-foot">No account. No sync. Export when you choose.</div></aside></section><section className="section"><p className="eyebrow">01 / FIRST RECORD</p><h2>Begin with a record you will need again.</h2><p>Log a conversation, choose a next-follow-up date, and use the filtered list to decide who to contact.</p><div className="card-grid"><div className="info-card"><strong>1. Name the detail</strong><p>Use the first field for the thing you will search for later, rather than a vague catch-all.</p></div><div className="info-card"><strong>2. Add context</strong><p>Record the practical facts beside it: status, timing, and the note that explains the decision.</p></div><div className="info-card"><strong>3. Review deliberately</strong><p>Search your local history, export when needed, and remove data that is no longer useful.</p></div></div></section><section className="section story"><p className="eyebrow">02 / WHY THIS RECORD EXISTS</p><h2>Small details are where useful decisions begin.</h2><p>{cfg.purpose} This is deliberately a local record rather than a social feed, an account portal, or an automated recommendation. It gives you a calm place to capture the exact fact, its context, and the practical next question while you still remember why it matters.</p><p>Every entry is searchable by the words you wrote. Use concise fields for things you expect to compare later, then use the note for nuance: an exception, an uncertainty, or the reason a future version of you should pause before acting.</p></section><section className="section"><p className="eyebrow">03 / THE CURRENT DESK</p><h2>Ten examples, clearly fictional.</h2><p>The first records are labelled demo data. They exist to demonstrate active, scheduled, reviewed, and archived states—never to imply real people, transactions, outcomes, or activity.</p><div className="card-grid">{records.slice(0,6).map((r,i)=><div className="info-card" key={r.id}><strong>{String(i+1).padStart(2,'0')} · {r.title}</strong><p>{r[cfg.fields[1]]} · {r[cfg.fields[2]]}<br/>{r[cfg.fields[4]]}</p></div>)}</div></section><section className="section"><p className="eyebrow">04 / A PRACTICAL LOOP</p><h2>Capture. Review. Carry forward.</h2><div className="card-grid"><div className="info-card"><strong>Capture</strong><p>Open the workspace when the detail is fresh. The required title prevents a record that cannot be found later.</p></div><div className="info-card"><strong>Review</strong><p>Search by a name, category, status, or note. Empty results are an invitation to change the query, not a dead end.</p></div><div className="info-card"><strong>Carry forward</strong><p>Export a Markdown or CSV copy before a handoff, a planning session, or a browser reset. Local data is yours to move.</p></div></div></section><section className="section"><p className="eyebrow">05 / WHAT THE TOOL DOES NOT DO</p><h2>Clear boundaries are part of the design.</h2><p>This app does not silently synchronize, infer facts, send reminders, or make a recommendation for you. Dates, labels, financial figures, health-related notes, disposal guidance, and any decisions based on them depend entirely on the information you enter and the context you verify.</p></section><section className="section"><p className="eyebrow">06 / KEEP A PORTABLE COPY</p><h2>Local-first should never mean trapped.</h2><p>Use JSON import and export for a browser-local backup, or CSV and Markdown when you need a readable copy. Imported JSON replaces the current local collection only after the file is successfully parsed; malformed files leave the saved records unchanged and show a clear error.</p></section><section className="section"><p className="eyebrow">07 / CONTINUE IN THE TOOL</p><h2>Use the real workspace, not a mock-up.</h2><p>The preview above is built from the same saved records used in the workspace. Open it to add, edit, remove, filter, import, and export local data.</p><div className="actions"><button className="primary" onClick={open}>Open workspace</button></div></section><footer className="section footer"><p className="eyebrow">08 / LOCAL PROJECT NOTES</p><p>This product stores its data in the active browser profile. Read the guide and limitations before relying on it for a consequential decision.</p></footer></>}
-function Workspace(){return <section className="workspace"><div className="toolbar"><input aria-label="Search records" value={query} onChange={e=>setQuery(e.target.value)} placeholder={'Search '+cfg.name}/><button onClick={()=>download(cfg.slug+'.md',toMarkdown(cfg.name,records))}>Export Markdown</button><button onClick={()=>download(cfg.slug+'.csv',csv(records),'text/csv')}>Export CSV</button><button onClick={()=>download(cfg.slug+'.json',JSON.stringify(records,null,2),'application/json')}>Export JSON</button><label className="import">Import JSON<input type="file" accept="application/json" onChange={e=>importJson(e.target.files?.[0])}/></label></div><div className="grid"><form onSubmit={add}><h2>Add followup</h2>{cfg.fields.map((f,i)=><label key={f}>{f}<input required={i===0} value={form[f]||''} onChange={e=>setForm({...form,[f]:e.target.value})} placeholder={'Enter '+f.toLowerCase()}/></label>)}<button className="primary">{editing?'Save changes':'Save record'}</button>{editing&&<button type="button" onClick={()=>{setEditing(null);setForm({})}}>Cancel edit</button>}{notice&&<p className="notice" role="status">{notice}</p>}</form><article className="records"><h2>{filtered.length} records</h2>{filtered.length===0?<p className="empty">No records match that search. Clear the search or create the first local record.</p>:filtered.map(r=><section className="card" key={r.id}><div><h3>{r.title}</h3>{cfg.fields.slice(1).map(f=><p key={f}><b>{f}</b> {r[f]||'—'}</p>)}</div><div><button onClick={()=>{setEditing(r);const values:Record<string,string>={};cfg.fields.forEach(f=>values[f]=r[f]||'');setForm(values);window.scrollTo({top:0,behavior:'smooth'})}}>Edit</button><button onClick={()=>{save(records.filter(x=>x.id!==r.id));setNotice('Record removed from this browser.')}}>Delete</button></div></section>)}</article></div><Special/></section>}
-function NotFound(){return <section className="section"><p className="eyebrow">404 / LOCAL ROUTE</p><h2>That page is not in this edition.</h2><p>Use the navigation to return to a known section.</p><button className="primary" onClick={()=>setPage('home')}>Return home</button></section>}
-function Guide({title}:{title:string}){return <Content kicker="02 / FIELD GUIDE" title={title} body="last contact, follow-up, interaction, cadence are the working vocabulary in this tool. The guide does not prescribe a single right process; it explains what each field records, why it is there, and how to keep the record useful over time." cards={[['Use plain language','Write the term that a future version of you will recognise quickly.'],['Keep dates practical','Use a date only when it helps you decide what to do or review next.'],['Separate facts from notes','Use short fields for filtering and the note for the detail that does not fit a label.']]}/>}
-function Examples(){return <Content kicker="03 / WORKED EXAMPLES" title="A record with enough context." body="The sample records are fictional and labelled as demo data. They show the difference between a title that can be found, structured fields that can be scanned, and a note that preserves the reason behind a decision." cards={[['A current item','Marked In focus, with a near date and a concise note.'],['A scheduled item','Has a future date so it appears when you are planning ahead.'],['An edge case','Uses a longer note to prove that more context remains readable.']]}/>}
-function Reference(){return <Content kicker="04 / METHOD" title="How this local tool handles information." body="Nudge Desk stores records in this browser using localStorage. Search runs against the saved local data. Markdown and CSV exports are created in your browser. There is no account, server synchronization, automatic backup, or claim that this record is authoritative outside the information you enter." cards={[['Local first','Your records remain in the active browser profile until you export or remove them.'],['Simple exports','Exports are designed to be readable and portable, not a full database backup format.'],['Human review','Dates, amounts, labels, and reminders depend on the data you enter and should be checked before acting.']]}/>}
-function Help(){return <section className="section"><p className="eyebrow">05 / HELP & LIMITS</p><h2>Useful boundaries make a tool more trustworthy.</h2><div className="faq"><details open><summary>Where is my data stored?</summary><p>In localStorage for this browser profile. Clearing browser data may remove it; use an export for a copy you control.</p></details><details><summary>Is the demo data real?</summary><p>No. It is fictional sample material designed to show populated, long-text, status, and archive states.</p></details><details><summary>What happens when a form is incomplete?</summary><p>The first field is required. The form gives a plain-language message and keeps the entered values available to correct.</p></details><details><summary>Can this replace specialist advice?</summary><p>No. It is a personal organization aid. The limitations and relevant disclaimers should guide how you use the records.</p></details></div></section>}
-function Content({kicker,title,body,cards}:{kicker:string;title:string;body:string;cards:string[][]}){return <section className="section"><p className="eyebrow">{kicker}</p><h2>{title}</h2><p>{body}</p><div className="card-grid">{cards.map(c=><div className="info-card" key={c[0]}><strong>{c[0]}</strong><p>{c[1]}</p></div>)}</div></section>}
-function Special(){if((cfg.kind as string)==='algorithm')return <section className="lab"><h2>Visible operations</h2><p>Use these controls to see an ordered set change. They are deliberately small: the explanation matters more than spectacle.</p><button onClick={()=>setAnswer('Values sorted: 4, 7, 12, 19')}>Sort sample</button><button onClick={()=>setAnswer('One comparison explained: 12 is greater than 7, so it moves after 7.')}>Explain step</button><p role="status">{answer}</p></section>;if((cfg.kind as string)==='garden')return <section className="lab"><h2>Bed grid</h2><div className="bed">{Array.from({length:12},(_,i)=><button key={i} onClick={()=>setAnswer('Plant marker placed in bed cell '+(i+1))}>{answer.includes(String(i+1))?'●':'+'}</button>)}</div><p role="status">{answer||'Select a cell to place a marker.'}</p></section>;return <section className="lab"><h2>Practice note</h2><p>Use this local workspace with the guide alongside it. A good record is specific enough to help later and short enough to keep current.</p></section>}}
+import { useMemo, useState, type ReactNode } from 'react';
+import { DemoTag, EmptyState, Field, Landing, NotFound, Notice, PageHead, Shell, downloadText, uid, useFlash, usePersistentState, useRoute } from './shared/ui';
+import { DataTable, useTable, type Column } from './shared/table';
+import { toCSV } from './shared/csv';
+import { addDays, daysBetween, formatDay, relativeDays, todayISO } from './shared/dates';
+import {
+  STAGES,
+  TYPES,
+  dueState,
+  followUpDate,
+  lastContact,
+  logInteraction,
+  queue,
+  snooze,
+  validateInteraction,
+  validatePerson,
+  warmth,
+  weekly,
+  type Interaction,
+  type InteractionType,
+  type Person,
+  type QueueItem,
+  type Stage,
+} from './lib/nudge';
+
+const KEY = 'nudge-desk:store';
+const NAV = [
+  { to: '/', label: 'Overview' },
+  { to: '/today', label: 'Follow-ups' },
+  { to: '/people', label: 'People' },
+  { to: '/pipeline', label: 'Pipeline' },
+  { to: '/activity', label: 'Activity' },
+];
+const TYPE_COLOR: Record<InteractionType, string> = { Email: 'var(--accent)', Call: '#2f6aa3', Meeting: '#5b7f3a', Message: '#8a4f9e', Event: '#b08a1e' };
+const WARMTH_LABEL = { warm: 'Warm', cooling: 'Cooling', cold: 'Cold', 'n/a': 'No rhythm' } as const;
+
+interface Store {
+  people: Person[];
+  log: Interaction[];
+}
+
+export function demoStore(today: string): Store {
+  const d = (n: number) => addDays(today, -n);
+  const p = (id: string, name: string, company: string, role: string, howMet: string, stage: Stage, cadence: number, tags: string[], nextDate: string | null = null): Person => ({ id: `demo-${id}`, name, company, role, howMet, stage, cadence, tags, nextDate, demo: true });
+  const people: Person[] = [
+    p('ana', 'Ana Ruiz', 'Brightside Studio (demo)', 'Design lead', 'Portfolio review meetup', 'Opportunity', 14, ['design', 'hiring'], addDays(today, 1)),
+    p('kofi', 'Kofi Mensah', 'Northwind Logistics (demo)', 'Ops manager', 'Former colleague', 'In conversation', 30, ['referral']),
+    p('lena', 'Lena Fischer', 'Demo Analytics GmbH', 'Head of data', 'Conference talk', 'Reached out', 21, ['data']),
+    p('raj', 'Raj Iyer', '', 'Freelance developer', 'Climbing gym', 'In conversation', 45, ['peer']),
+    p('mei', 'Mei Chen', 'Harbour Health (demo)', 'Product manager', 'LinkedIn message', 'New', 7, ['product']),
+    p('tom', 'Tom Okoye', 'Okoye & Partners Architecture and Interiors (demo)', 'Founding partner', 'Introduced by Kofi', 'Opportunity', 10, ['client'], d(2)),
+    p('sara', 'Sara Lind', 'Demo Foundation', 'Programme officer', 'Grant webinar', 'Closed', 0, ['grant']),
+    p('jules', 'Jules Martin', '', 'Mentor', 'University alumni event', 'In conversation', 60, ['mentor']),
+  ];
+  const log: Interaction[] = [];
+  const add = (pid: string, days: number, type: InteractionType, summary: string, nextStep = '') => log.push({ id: `demo-i${log.length}`, personId: `demo-${pid}`, date: d(days), type, summary, nextStep });
+  add('ana', 3, 'Meeting', 'Coffee to talk about the design systems role. Interview loop starts next month.', 'Send case study PDF');
+  add('ana', 20, 'Email', 'Thanked her for the portfolio feedback.');
+  add('kofi', 40, 'Call', 'Catch-up; he may need help with a dashboard project in Q1.', 'Check in after budget approval');
+  add('kofi', 95, 'Message', 'Congratulated him on the promotion.');
+  add('lena', 26, 'Email', 'Followed up after her talk on data quality; shared my notes.');
+  add('raj', 12, 'Event', 'Met at the climbing gym social; swapped ideas on side projects.');
+  add('tom', 9, 'Meeting', 'Scoped a website refresh; waiting for their partners’ decision.', 'Send revised quote');
+  add('tom', 16, 'Call', 'Intro call via Kofi.');
+  add('sara', 70, 'Email', 'Grant application submitted; outcome expected in spring.');
+  add('jules', 50, 'Call', 'Monthly mentoring call: talked about pricing freelance work.');
+  add('jules', 110, 'Meeting', 'First mentoring session.');
+  for (let w = 1; w < 12; w++) if (w % 3 !== 0) add(['raj', 'kofi', 'lena'][w % 3], w * 7 + 3, w % 2 ? 'Message' : 'Email', 'Quick check-in.');
+  return { people, log };
+}
+
+export default function App() {
+  const [route, navigate] = useRoute();
+  const today = todayISO();
+  const [store, setStore] = usePersistentState<Store>(KEY, () => demoStore(today));
+  const ctx = { store, setStore, today, navigate };
+  const view = route.match(/^\/person\/(.+)$/);
+  let page: ReactNode;
+  if (route === '/') page = <Home />;
+  else if (route === '/today') page = <Today {...ctx} />;
+  else if (route === '/people') page = <People {...ctx} />;
+  else if (view) page = <PersonPage {...ctx} id={view[1]} />;
+  else if (route === '/pipeline') page = <Pipeline {...ctx} />;
+  else if (route === '/activity') page = <Activity {...ctx} />;
+  else page = <NotFound />;
+  return (
+    <Shell name="Nudge Desk" wordmark={['Nudge', 'Desk']} nav={NAV} route={route} cta={{ to: '/today', label: 'Who to contact' }} footerNote="Notes stay in this browser. Nudge Desk never contacts anyone for you.">
+      {page}
+    </Shell>
+  );
+}
+
+type Ctx = { store: Store; setStore: (s: Store) => void; today: string; navigate: (to: string) => void };
+
+function Warmth({ w }: { w: ReturnType<typeof warmth> }) {
+  return <span className={`warm w-${w.replace('/', '')}`}><i aria-hidden="true" />{WARMTH_LABEL[w]}</span>;
+}
+
+function LogForm({ person, store, setStore, today, onDone, compact }: { person: Person; store: Store; setStore: (s: Store) => void; today: string; onDone?: () => void; compact?: boolean }) {
+  const [d, setD] = useState({ date: today, type: 'Email' as InteractionType, summary: '', nextStep: '', nextDate: person.cadence ? addDays(today, person.cadence) : '' });
+  const [submitted, setSubmitted] = useState(false);
+  const errors = submitted ? validateInteraction(d, today) : {};
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitted(true);
+    if (Object.keys(validateInteraction(d, today)).length) return;
+    setStore({
+      people: store.people.map((p) => (p.id === person.id ? logInteraction(p, d.nextDate && d.nextDate !== addDays(d.date, p.cadence) ? d.nextDate : null) : p)),
+      log: [...store.log, { id: uid('int'), personId: person.id, date: d.date, type: d.type, summary: d.summary.trim(), nextStep: d.nextStep.trim() }],
+    });
+    onDone?.();
+  }
+  return (
+    <form className={`stack log-form ${compact ? 'is-compact' : ''}`} onSubmit={save} noValidate aria-label={`Log an interaction with ${person.name}`}>
+      <div className="form-grid">
+        <Field label="Date" error={errors.date}>{(p) => <input {...p} type="date" max={today} value={d.date} onChange={(e) => setD({ ...d, date: e.target.value })} />}</Field>
+        <Field label="How">{(p) => <select {...p} value={d.type} onChange={(e) => setD({ ...d, type: e.target.value as InteractionType })}>{TYPES.map((t) => <option key={t}>{t}</option>)}</select>}</Field>
+        <Field label="Next follow-up" hint={person.cadence ? `Default: ${person.cadence} days later` : 'Optional'} error={errors.nextDate}>{(p) => <input {...p} type="date" min={today} value={d.nextDate} onChange={(e) => setD({ ...d, nextDate: e.target.value })} />}</Field>
+      </div>
+      <Field label="What happened" error={errors.summary}>{(p) => <textarea {...p} rows={2} value={d.summary} onChange={(e) => setD({ ...d, summary: e.target.value })} />}</Field>
+      <Field label="Next step" hint="Optional">{(p) => <input {...p} value={d.nextStep} onChange={(e) => setD({ ...d, nextStep: e.target.value })} />}</Field>
+      <div className="row"><button className="btn btn-primary" type="submit">Save interaction</button>{onDone && <button type="button" className="btn btn-ghost" onClick={onDone}>Cancel</button>}</div>
+    </form>
+  );
+}
+
+function QueueRow({ q, store, setStore, today, compact }: { q: QueueItem; store: Store; setStore: (s: Store) => void; today: string; compact?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const w = warmth(q.person, store.log, today);
+  const days = daysBetween(today, q.date);
+  return (
+    <li className={`q-row d-${q.due}`}>
+      <div className="q-main">
+        <span className="q-when"><b>{q.due === 'overdue' ? `${-days}d` : q.due === 'today' ? 'Due' : `${days}d`}</b><small>{q.due === 'overdue' ? 'late' : q.due === 'today' ? 'today' : 'to go'}</small></span>
+        <span className="q-who">
+          {compact ? <strong>{q.person.name}</strong> : <a href={`#/person/${q.person.id}`}><strong>{q.person.name}</strong></a>}
+          <span className="small muted">{[q.person.role, q.person.company].filter(Boolean).join(' · ')}</span>
+          <span className="small">{q.last ? `Last: ${q.last.type.toLowerCase()} ${relativeDays(daysBetween(today, q.last.date))}${q.last.nextStep ? ` — next step: ${q.last.nextStep}` : ''}` : 'Never contacted'}</span>
+        </span>
+        <Warmth w={w} />
+      </div>
+      {!compact && (
+        <div className="row q-actions">
+          <button type="button" className="btn btn-sm btn-primary" aria-expanded={open} onClick={() => setOpen(!open)}>Log interaction</button>
+          <button type="button" className="btn btn-sm" onClick={() => setStore({ ...store, people: store.people.map((p) => (p.id === q.person.id ? snooze(p, 3, today) : p)) })} aria-label={`Snooze ${q.person.name} for 3 days`}>+3 days</button>
+          <button type="button" className="btn btn-sm" onClick={() => setStore({ ...store, people: store.people.map((p) => (p.id === q.person.id ? snooze(p, 7, today) : p)) })} aria-label={`Snooze ${q.person.name} for a week`}>+1 week</button>
+        </div>
+      )}
+      {open && <LogForm person={q.person} store={store} setStore={setStore} today={today} onDone={() => setOpen(false)} compact />}
+    </li>
+  );
+}
+
+function HeroPreview() {
+  const today = todayISO();
+  const s = demoStore(today);
+  const q = queue(s.people, s.log, today).slice(0, 4);
+  return <ul className="queue hero-q">{q.map((x) => <QueueRow key={x.person.id} q={x} store={s} setStore={() => {}} today={today} compact />)}</ul>;
+}
+
+function Home() {
+  return (
+    <Landing
+      eyebrow="Follow-up tracker"
+      title={<>Stay in touch <em>on purpose.</em></>}
+      lead="For job searches, freelance leads and the people you don’t want to lose touch with. Log each conversation, set how often you mean to follow up, and Nudge Desk tells you who’s due — and who’s going cold."
+      primary={{ href: '#/today', label: 'See who’s due' }}
+      secondary={{ href: '#/pipeline', label: 'View the pipeline' }}
+      previewLabel="Follow-ups — demo contacts"
+      preview={<HeroPreview />}
+      steps={[
+        { title: 'Add a person', body: 'Who they are, how you met, a stage, and how often you’d like to be in touch.' },
+        { title: 'Log conversations', body: 'Calls, emails, meetings — with a line of notes and the agreed next step.' },
+        { title: 'Work the queue', body: 'Each day shows who’s overdue, due today or this week. Log, or snooze for a few days.' },
+      ]}
+      stepsIntro="Nudge Desk opens with eight labelled, fictional contacts and three months of history. Clear them when you’re ready."
+      features={[
+        { title: 'Rhythm, not reminders', body: 'Follow-ups come from each person’s cadence and your last contact, unless you set a specific date.' },
+        { title: 'Warm, cooling, cold', body: 'See at a glance whose relationship is overdue for attention.' },
+        { title: 'Simple pipeline', body: 'New → reached out → in conversation → opportunity → closed.' },
+        { title: 'Activity chart', body: 'Twelve weeks of outreach by type, so you can see whether you’re keeping it up.' },
+      ]}
+      note="Nudge Desk is a notebook. It never emails or messages anyone."
+      closing={{ title: <>One message today <em>beats ten next month.</em></>, action: { href: '#/today', label: 'Start with today' } }}
+    />
+  );
+}
+
+function Today({ store, setStore, today }: Ctx) {
+  const q = queue(store.people, store.log, today);
+  const groups: [string, QueueItem[]][] = [['Overdue', q.filter((x) => x.due === 'overdue')], ['Today', q.filter((x) => x.due === 'today')], ['This week', q.filter((x) => x.due === 'week')]];
+  const later = q.filter((x) => x.due === 'later').length;
+  if (store.people.length === 0) return <EmptyState title="No one to follow up with yet" actions={<><a className="btn btn-primary" href="#/people">Add a person</a><button type="button" className="btn" onClick={() => setStore(demoStore(today))}>Load demo contacts</button></>}>Add someone you’d like to stay in touch with.</EmptyState>;
+  return (
+    <div className="stack">
+      <PageHead eyebrow={formatDay(today, { weekday: 'long', day: 'numeric', month: 'long' })} title={<>Who to <em>nudge.</em></>} description={`${groups[0][1].length} overdue · ${groups[1][1].length} today · ${groups[2][1].length} this week · ${later} later`} />
+      {groups.every(([, l]) => l.length === 0) && <EmptyState title="All caught up">Nobody is due this week. Nice work.</EmptyState>}
+      {groups.filter(([, l]) => l.length).map(([title, list]) => (
+        <section key={title} aria-labelledby={`g-${title}`} className="stack">
+          <h2 id={`g-${title}`} className="h3">{title} <span className="badge">{list.length}</span></h2>
+          <ul className="queue">{list.map((x) => <QueueRow key={x.person.id} q={x} store={store} setStore={setStore} today={today} />)}</ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function People({ store, setStore, today, navigate }: Ctx) {
+  const [flash, setFlash] = useFlash();
+  const [stage, setStage] = useState('');
+  const [q, setQ] = useState('');
+  const [d, setD] = useState({ name: '', company: '', role: '', howMet: '', cadence: '30' });
+  const [submitted, setSubmitted] = useState(false);
+  const errors = submitted ? validatePerson(d) : {};
+  const rows = useMemo(() => store.people.filter((p) => (!stage || p.stage === stage) && `${p.name} ${p.company} ${p.role} ${p.tags.join(' ')}`.toLowerCase().includes(q.trim().toLowerCase())), [store, stage, q]);
+  const columns: Column<Person>[] = [
+    { key: 'name', label: 'Name', sort: (p) => p.name, render: (p) => <><a href={`#/person/${p.id}`}>{p.name}</a>{p.demo && <> <DemoTag /></>}<div className="small muted">{[p.role, p.company].filter(Boolean).join(' · ')}</div></> },
+    { key: 'stage', label: 'Stage', sort: (p) => STAGES.indexOf(p.stage), render: (p) => p.stage },
+    { key: 'last', label: 'Last contact', sort: (p) => lastContact(p.id, store.log)?.date ?? '', render: (p) => { const l = lastContact(p.id, store.log); return l ? relativeDays(daysBetween(today, l.date)) : 'Never'; } },
+    { key: 'next', label: 'Next follow-up', sort: (p) => followUpDate(p, store.log, today) ?? '', render: (p) => { const n = followUpDate(p, store.log, today); const s = dueState(n, today); return n ? <span className={`badge ${s === 'overdue' ? 'badge-err' : s === 'today' ? 'badge-warn' : ''}`}>{relativeDays(daysBetween(today, n))}</span> : '—'; } },
+    { key: 'warm', label: 'Warmth', sort: (p) => ['cold', 'cooling', 'warm', 'n/a'].indexOf(warmth(p, store.log, today)), render: (p) => <Warmth w={warmth(p, store.log, today)} /> },
+  ];
+  const table = useTable(rows, columns, { initialSort: 'next' });
+  function add(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitted(true);
+    if (Object.keys(validatePerson(d)).length) return;
+    const id = uid('person');
+    setStore({ ...store, people: [...store.people, { id, name: d.name.trim(), company: d.company.trim(), role: d.role.trim(), howMet: d.howMet.trim(), stage: 'New', cadence: Number(d.cadence), nextDate: null, tags: [] }] });
+    navigate(`/person/${id}`);
+  }
+  return (
+    <div className="stack">
+      <PageHead eyebrow="People" title={<>Everyone you’re <em>keeping up with.</em></>} actions={<button type="button" className="btn" disabled={!store.log.length} onClick={() => downloadText('nudge-desk-interactions.csv', toCSV(['Date', 'Person', 'Company', 'Type', 'Summary', 'Next step'], [...store.log].sort((a, b) => b.date.localeCompare(a.date)).map((i) => { const p = store.people.find((x) => x.id === i.personId); return [i.date, p?.name ?? '', p?.company ?? '', i.type, i.summary, i.nextStep]; })), 'text/csv')}>Export interactions</button>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      {store.people.length > 0 && (
+        <div className="card stack">
+          <div className="filters">
+            <Field label="Search" className="grow">{(p) => <input {...p} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, company, role or tag" />}</Field>
+            <Field label="Stage">{(p) => <select {...p} value={stage} onChange={(e) => setStage(e.target.value)}><option value="">All stages</option>{STAGES.map((s) => <option key={s}>{s}</option>)}</select>}</Field>
+          </div>
+          <DataTable caption="People" columns={columns} table={table} rowKey={(p) => p.id} empty="Nobody matches these filters." />
+          {store.people.some((p) => p.demo) && <div><button type="button" className="btn btn-ghost btn-sm" onClick={() => { const ids = new Set(store.people.filter((p) => p.demo).map((p) => p.id)); setStore({ people: store.people.filter((p) => !p.demo), log: store.log.filter((i) => !ids.has(i.personId)) }); setFlash({ kind: 'success', text: 'Demo contacts removed.' }); }}>Clear demo contacts</button></div>}
+        </div>
+      )}
+      <form className="card stack" onSubmit={add} noValidate aria-labelledby="add-p">
+        <h2 id="add-p" className="h3">Add a person</h2>
+        <div className="form-grid">
+          <Field label="Name" error={errors.name}>{(p) => <input {...p} value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} />}</Field>
+          <Field label="Company">{(p) => <input {...p} value={d.company} onChange={(e) => setD({ ...d, company: e.target.value })} />}</Field>
+          <Field label="Role">{(p) => <input {...p} value={d.role} onChange={(e) => setD({ ...d, role: e.target.value })} />}</Field>
+          <Field label="How you met">{(p) => <input {...p} value={d.howMet} onChange={(e) => setD({ ...d, howMet: e.target.value })} />}</Field>
+          <Field label="Follow up every (days)" hint="0 = no regular follow-up" error={errors.cadence}>{(p) => <input {...p} inputMode="numeric" value={d.cadence} onChange={(e) => setD({ ...d, cadence: e.target.value })} />}</Field>
+        </div>
+        <div><button className="btn btn-primary" type="submit">Add person</button></div>
+      </form>
+    </div>
+  );
+}
+
+function PersonPage({ store, setStore, today, navigate, id }: Ctx & { id: string }) {
+  const person = store.people.find((p) => p.id === id);
+  const [flash, setFlash] = useFlash();
+  if (!person) return <EmptyState title="Person not found" actions={<a className="btn btn-primary" href="#/people">Back to people</a>} />;
+  const history = store.log.filter((i) => i.personId === person.id).sort((a, b) => b.date.localeCompare(a.date));
+  const next = followUpDate(person, store.log, today);
+  const update = (patch: Partial<Person>) => setStore({ ...store, people: store.people.map((p) => (p.id === person.id ? { ...p, ...patch } : p)) });
+  return (
+    <div className="stack">
+      <PageHead eyebrow={<><a href="#/people">People</a> / {person.stage}</>} title={person.name} description={[person.role, person.company, person.howMet && `met: ${person.howMet}`].filter(Boolean).join(' · ') || undefined}
+        actions={<button type="button" className="btn btn-danger" onClick={() => { if (window.confirm(`Remove ${person.name} and their history?`)) { setStore({ people: store.people.filter((p) => p.id !== person.id), log: store.log.filter((i) => i.personId !== person.id) }); navigate('/people'); } }}>Remove</button>} />
+      {flash && <Notice kind={flash.kind} onDismiss={() => setFlash(null)}>{flash.text}</Notice>}
+      {person.demo && <p><DemoTag /> <span className="small muted">A fictional demo contact.</span></p>}
+      <div className="stats">
+        <div className="stat"><span className="stat-label">Next follow-up</span><span className="stat-value" data-testid="next">{next ? relativeDays(daysBetween(today, next)) : '—'}</span></div>
+        <div className="stat"><span className="stat-label">Warmth</span><span className="stat-value"><Warmth w={warmth(person, store.log, today)} /></span></div>
+        <div className="stat"><span className="stat-label">Interactions</span><span className="stat-value">{history.length}</span></div>
+      </div>
+      <div className="layout-main">
+        <section className="card stack" aria-labelledby="hist">
+          <h2 id="hist" className="h3">History</h2>
+          <LogForm person={person} store={store} setStore={(s) => { setStore(s); setFlash({ kind: 'success', text: 'Interaction saved.' }); }} today={today} />
+          {history.length === 0 ? <p className="muted">No interactions yet.</p> : (
+            <ol className="timeline">
+              {history.map((i) => (
+                <li key={i.id} style={{ ['--c' as string]: TYPE_COLOR[i.type] }}>
+                  <span className="small mono">{formatDay(i.date, { day: 'numeric', month: 'short', year: 'numeric' })} · {i.type}</span>
+                  <p>{i.summary}</p>
+                  {i.nextStep && <p className="small"><strong>Next step:</strong> {i.nextStep}</p>}
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+        <aside className="card stack">
+          <h2 className="h3">Settings</h2>
+          <Field label="Stage">{(p) => <select {...p} value={person.stage} onChange={(e) => update({ stage: e.target.value as Stage })}>{STAGES.map((s) => <option key={s}>{s}</option>)}</select>}</Field>
+          <Field label="Follow up every (days)" hint="0 = no regular follow-up">{(p) => <input {...p} inputMode="numeric" defaultValue={person.cadence} onBlur={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 0 && n <= 365) update({ cadence: n }); else setFlash({ kind: 'error', text: 'Use 0–365 days.' }); }} />}</Field>
+          <Field label="Specific follow-up date" hint="Overrides the rhythm until you log again">{(p) => <input {...p} type="date" value={person.nextDate ?? ''} onChange={(e) => update({ nextDate: e.target.value || null })} />}</Field>
+          {person.nextDate && <button type="button" className="btn btn-sm btn-ghost" onClick={() => update({ nextDate: null })}>Clear specific date</button>}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Pipeline({ store, setStore, today }: Ctx) {
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Pipeline" title={<>Where things <em>stand.</em></>} description="Move people along as conversations progress." />
+      <div className="pipeline">
+        {STAGES.map((s) => {
+          const list = store.people.filter((p) => p.stage === s);
+          return (
+            <section key={s} className="stage" aria-labelledby={`st-${s}`}>
+              <h2 id={`st-${s}`} className="stage-head"><span>{s}</span><span className="badge">{list.length}</span></h2>
+              <ul className="stage-list">
+                {list.map((p) => {
+                  const i = STAGES.indexOf(s);
+                  return (
+                    <li key={p.id} className="stage-card">
+                      <a href={`#/person/${p.id}`}><strong>{p.name}</strong></a>
+                      <span className="small muted">{p.company || p.role || '—'}</span>
+                      <Warmth w={warmth(p, store.log, today)} />
+                      <div className="row nowrap">
+                        {i > 0 && <button type="button" className="icon-btn" aria-label={`Move ${p.name} back to ${STAGES[i - 1]}`} onClick={() => setStore({ ...store, people: store.people.map((x) => (x.id === p.id ? { ...x, stage: STAGES[i - 1] } : x)) })}>←</button>}
+                        {i < STAGES.length - 1 && <button type="button" className="icon-btn" aria-label={`Move ${p.name} to ${STAGES[i + 1]}`} onClick={() => setStore({ ...store, people: store.people.map((x) => (x.id === p.id ? { ...x, stage: STAGES[i + 1] } : x)) })}>→</button>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Activity({ store, today }: Ctx) {
+  const weeks = weekly(store.log, today, 12);
+  const max = Math.max(4, ...weeks.map((w) => w.total));
+  const [tip, setTip] = useState<string | null>(null);
+  const recent = store.log.filter((i) => i.date > addDays(today, -28)).length;
+  return (
+    <div className="stack">
+      <PageHead eyebrow="Activity" title={<>Twelve weeks <em>of outreach.</em></>} />
+      <div className="stats">
+        <div className="stat"><span className="stat-label">Last 4 weeks</span><span className="stat-value">{recent}</span></div>
+        <div className="stat"><span className="stat-label">Weekly average</span><span className="stat-value">{(weeks.reduce((s, w) => s + w.total, 0) / weeks.length).toFixed(1)}</span></div>
+        <div className="stat"><span className="stat-label">Cold relationships</span><span className="stat-value">{store.people.filter((p) => warmth(p, store.log, today) === 'cold').length}</span></div>
+      </div>
+      <section className="card stack" aria-labelledby="w-t">
+        <h2 id="w-t" className="h3">Interactions per week</h2>
+        <div className="bars-wrap" onMouseLeave={() => setTip(null)}>
+          <div className="bars-axis" aria-hidden="true">{[max, Math.round(max / 2), 0].map((t) => <span key={t}>{t}</span>)}</div>
+          <div className="bars" role="img" aria-label={weeks.map((w) => `Week of ${formatDay(w.week, { day: 'numeric', month: 'short' })}: ${w.total}`).join(', ')}>
+            {weeks.map((w, i) => {
+              const text = `Week of ${formatDay(w.week, { day: 'numeric', month: 'short' })}: ${w.total} (${TYPES.filter((t) => w.byType[t]).map((t) => `${w.byType[t]} ${t.toLowerCase()}`).join(', ') || 'none'})`;
+              return (
+                <div key={w.week} className="bar-col" style={{ ['--i' as string]: i }} tabIndex={0} aria-label={text} onMouseEnter={() => setTip(text)} onFocus={() => setTip(text)} onBlur={() => setTip(null)}>
+                  <div className="bar-stack" style={{ height: `${(w.total / max) * 100}%` }}>{TYPES.filter((t) => w.byType[t]).map((t) => <span key={t} style={{ flexGrow: w.byType[t], background: TYPE_COLOR[t] }} />)}</div>
+                  <span className="bar-label mono">{formatDay(w.week, { day: 'numeric', month: 'numeric' })}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <p className="small" aria-live="polite">{tip ?? 'Hover or focus a week for the breakdown.'}</p>
+        <p className="legend">{TYPES.map((t) => <span key={t}><i style={{ background: TYPE_COLOR[t] }} />{t}</span>)}<span className="muted">· weeks start on Monday</span></p>
+      </section>
+    </div>
+  );
+}
